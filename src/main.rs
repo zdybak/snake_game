@@ -139,6 +139,14 @@ impl GameContext {
         //self collision
         for i in 1..self.player_position.len() {
             if self.player_position[0] == self.player_position[i] {
+                println!(
+                    "Collision with head {},{} and segment {},{} in segment position {}",
+                    self.player_position[0].0,
+                    self.player_position[0].1,
+                    self.player_position[i].0,
+                    self.player_position[i].1,
+                    i
+                );
                 self.game_over();
             }
         }
