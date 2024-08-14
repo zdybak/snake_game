@@ -291,7 +291,7 @@ fn main() -> Result<(), String> {
         frame_counter += 1;
 
         let duration = game_time.elapsed();
-        if duration.as_millis() >= 256 {
+        if duration.as_millis() >= 64 {
             context.next_tick();
             game_time = Instant::now();
         }
