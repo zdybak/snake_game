@@ -1,6 +1,5 @@
 extern crate rand;
 extern crate sdl2;
-use core::time;
 use rand::Rng;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -9,7 +8,6 @@ use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
 use sdl2::video::Window;
 use std::ops::Add;
-use std::time::Duration;
 use std::time::Instant;
 
 const GRID_X_SIZE: u32 = 40;
@@ -52,6 +50,7 @@ pub struct GameContext {
     pub player_direction: PlayerDirection,
     pub food: Point,
     pub state: GameState,
+    pub food_eaten: u32,
 }
 
 impl GameContext {
@@ -61,6 +60,7 @@ impl GameContext {
             player_direction: PlayerDirection::Right,
             state: GameState::Paused,
             food: Point(3, 3),
+            food_eaten: 0,
         }
     }
 
@@ -120,6 +120,7 @@ impl GameContext {
     }
 
     fn game_over(&mut self) {
+        println!("Game Over, food eaten: {}", self.food_eaten);
         self.state = GameState::Over;
     }
 
@@ -137,6 +138,7 @@ impl GameContext {
             self.spawn_food();
             let tail = self.food.clone();
             self.player_position.push(tail);
+            self.food_eaten += 1;
         }
         //self collision
         for i in 1..self.player_position.len() {
@@ -280,7 +282,7 @@ fn main() -> Result<(), String> {
         frame_counter += 1;
 
         let duration = game_time.elapsed();
-        if duration.as_millis() >= 32 {
+        if duration.as_millis() >= 64 {
             context.next_tick();
             game_time = Instant::now();
         }
