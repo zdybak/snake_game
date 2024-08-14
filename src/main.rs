@@ -127,20 +127,14 @@ impl GameContext {
     fn check_collision(&mut self) {
         //x/y wall collision
         if self.player_position[0].0 < 0 || self.player_position[0].0 > (GRID_X_SIZE - 1) as i32 {
+            println!("Collision with wall");
             self.game_over();
         }
         if self.player_position[0].1 < 0 || self.player_position[0].1 > (GRID_Y_SIZE - 1) as i32 {
+            println!("Collision with wall");
             self.game_over();
         }
-        //fruit collision
-        if self.player_position[0] == self.food {
-            //spawn new food
-            self.spawn_food();
-            let tail = self.food.clone();
-            self.player_position.push(tail);
-            self.food_eaten += 1;
-        }
-        //self collision
+        //self collision must be above food collision to avoid colliding with newly grown segment.
         for i in 1..self.player_position.len() {
             if self.player_position[0] == self.player_position[i] {
                 println!(
@@ -149,10 +143,25 @@ impl GameContext {
                     self.player_position[0].1,
                     self.player_position[i].0,
                     self.player_position[i].1,
-                    i
+                    i + 1
                 );
                 self.game_over();
             }
+        }
+        //fruit collision
+        if self.player_position[0] == self.food {
+            //spawn new food
+            let tail = self.food.clone();
+            self.player_position.push(tail);
+            self.food_eaten += 1;
+            println!(
+                "Head Point: {},{}   Tail Point: {},{}",
+                self.player_position[0].0,
+                self.player_position[0].1,
+                self.player_position[self.player_position.len() - 1].0,
+                self.player_position[self.player_position.len() - 1].1
+            );
+            self.spawn_food();
         }
     }
 
@@ -248,7 +257,7 @@ fn main() -> Result<(), String> {
     let mut frame_counter = 0;
     let mut game_time = Instant::now();
     let mut fps_time = Instant::now();
-    
+
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
@@ -282,7 +291,7 @@ fn main() -> Result<(), String> {
         frame_counter += 1;
 
         let duration = game_time.elapsed();
-        if duration.as_millis() >= 64 {
+        if duration.as_millis() >= 256 {
             context.next_tick();
             game_time = Instant::now();
         }
