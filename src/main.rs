@@ -1,5 +1,6 @@
 extern crate rand;
 extern crate sdl2;
+use core::time;
 use rand::Rng;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -9,6 +10,7 @@ use sdl2::render::WindowCanvas;
 use sdl2::video::Window;
 use std::ops::Add;
 use std::time::Duration;
+use std::time::Instant;
 
 const GRID_X_SIZE: u32 = 40;
 const GRID_Y_SIZE: u32 = 30;
@@ -242,7 +244,9 @@ fn main() -> Result<(), String> {
     let mut context = GameContext::new();
 
     let mut frame_counter = 0;
-
+    let mut game_time = Instant::now();
+    let mut fps_time = Instant::now();
+    
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
@@ -264,13 +268,21 @@ fn main() -> Result<(), String> {
             }
         }
 
-        renderer.draw(&context)?;
-        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 30));
-
-        frame_counter += 1;
-        if frame_counter % 5 == 0 {
-            context.next_tick();
+        //calculate FPS
+        let fps_duration = fps_time.elapsed();
+        if fps_duration.as_millis() >= 1_000 {
+            //println!("Current FPS: {}", frame_counter);
             frame_counter = 0;
+            fps_time = Instant::now();
+        }
+
+        renderer.draw(&context)?;
+        frame_counter += 1;
+
+        let duration = game_time.elapsed();
+        if duration.as_millis() >= 32 {
+            context.next_tick();
+            game_time = Instant::now();
         }
     }
 
