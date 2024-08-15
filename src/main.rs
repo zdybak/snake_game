@@ -1,19 +1,24 @@
 extern crate rand;
 extern crate sdl2;
+
 use rand::Rng;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
+use sdl2::sys::ttf::TTF_Font;
+use sdl2::ttf::Sdl2TtfContext;
 use sdl2::video::Window;
 use std::ops::Add;
+use std::path::Path;
 use std::time::Instant;
 
 const GRID_X_SIZE: u32 = 40;
 const GRID_Y_SIZE: u32 = 30;
 const DOT_SIZE_IN_PXS: u32 = 20;
 
+#[derive(PartialEq)]
 pub enum GameState {
     Playing,
     Paused,
@@ -154,18 +159,13 @@ impl GameContext {
             let tail = self.food.clone();
             self.player_position.push(tail);
             self.food_eaten += 1;
-            println!(
-                "Head Point: {},{}   Tail Point: {},{}",
-                self.player_position[0].0,
-                self.player_position[0].1,
-                self.player_position[self.player_position.len() - 1].0,
-                self.player_position[self.player_position.len() - 1].1
-            );
+            
             self.spawn_food();
         }
     }
 
     fn spawn_food(&mut self) {
+        //todo: make it so food can't spawn inside snake body.
         let mut rng = rand::thread_rng();
 
         let x = rng.gen_range(0..GRID_X_SIZE as i32);
@@ -178,12 +178,15 @@ impl GameContext {
 
 pub struct Renderer {
     canvas: WindowCanvas,
+    ttf: Sdl2TtfContext,
 }
 
 impl Renderer {
     pub fn new(window: Window) -> Result<Renderer, String> {
         let canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
-        Ok(Renderer { canvas })
+        let ttf = sdl2::ttf::init().map_err(|e| e.to_string())?;
+
+        Ok(Renderer { canvas, ttf })
     }
 
     fn draw_dot(&mut self, point: &Point) -> Result<(), String> {
@@ -206,6 +209,28 @@ impl Renderer {
         };
         self.canvas.set_draw_color(color);
         self.canvas.clear();
+
+        if context.state == GameState::Paused {
+            self.draw_text("Snake Game", Color::WHITE, 128, 120, 100);
+            self.draw_text("PAUSED", Color::RED, 64, 260, 240);
+            self.draw_text(
+                "ESC: quit   SB: toggle pause    N: new game WASD: move",
+                Color::GRAY,
+                32,
+                40,
+                560,
+            );
+        }
+
+        if context.state == GameState::Over {
+            self.draw_text("Snake Game", Color::WHITE, 128, 120, 100);
+            self.draw_text("Game Over", Color::BLACK, 64, 260, 220);
+            let status_text = format!(
+                "You ate {} fruit before you ate the wall or yourself!",
+                context.food_eaten
+            );
+            self.draw_text(&status_text, Color::BLACK, 32, 40, 560);
+        }
     }
 
     fn draw_player(&mut self, context: &GameContext) -> Result<(), String> {
@@ -231,6 +256,28 @@ impl Renderer {
 
         Ok(())
     }
+
+    fn draw_text(&mut self, text: &str, color: Color, size: u16, x_pos: i32, y_pos: i32) {
+        // Render text to a surface, then create a texture from the surface
+        let surface = self
+            .ttf
+            .load_font(Path::new("Zdybak-Regular.ttf"), size)
+            .unwrap()
+            .render(text)
+            .blended(color)
+            .map_err(|e| e.to_string())
+            .unwrap();
+
+        let texture_creator = self.canvas.texture_creator();
+        let texture = texture_creator
+            .create_texture_from_surface(&surface)
+            .map_err(|e| e.to_string())
+            .unwrap();
+
+        // Get the size of the rendered text to position it on the screen
+        let target = Rect::new(x_pos, y_pos, surface.width(), surface.height());
+        self.canvas.copy(&texture, None, Some(target)).unwrap();
+    }
 }
 
 fn main() -> Result<(), String> {
@@ -239,7 +286,7 @@ fn main() -> Result<(), String> {
 
     let window = video_subsystem
         .window(
-            "Rust sdl2 Snake",
+            "Nov LOVES Zendaya",
             GRID_X_SIZE * DOT_SIZE_IN_PXS,
             GRID_Y_SIZE * DOT_SIZE_IN_PXS,
         )
@@ -249,6 +296,10 @@ fn main() -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
     let mut renderer = Renderer::new(window)?;
+
+    renderer
+        .ttf
+        .load_font(Path::new("Zdybak-Regular.ttf"), 128)?;
 
     let mut event_pump = sdl_context.event_pump()?;
 
