@@ -4,10 +4,10 @@ extern crate sdl2;
 use rand::Rng;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
+use sdl2::mixer::{InitFlag, AUDIO_S16LSB, DEFAULT_CHANNELS};
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
-use sdl2::sys::ttf::TTF_Font;
 use sdl2::ttf::Sdl2TtfContext;
 use sdl2::video::Window;
 use std::ops::Add;
@@ -56,6 +56,9 @@ pub struct GameContext {
     pub food: Point,
     pub state: GameState,
     pub food_eaten: u32,
+    pub fps: i32,
+    pub show_fps: bool,
+    pub play_sound_gulp: bool,
 }
 
 impl GameContext {
@@ -66,6 +69,9 @@ impl GameContext {
             state: GameState::Paused,
             food: Point(3, 3),
             food_eaten: 0,
+            fps: 0,
+            show_fps: false,
+            play_sound_gulp: false,
         }
     }
 
@@ -159,7 +165,8 @@ impl GameContext {
             let tail = self.food.clone();
             self.player_position.push(tail);
             self.food_eaten += 1;
-            
+            self.play_sound_gulp = true;
+
             self.spawn_food();
         }
     }
@@ -173,6 +180,22 @@ impl GameContext {
 
         let new_food = Point(x, y);
         self.food = new_food;
+    }
+
+    pub fn toggle_fps(&mut self) {
+        self.show_fps = match self.show_fps {
+            true => false,
+            false => true,
+        };
+    }
+
+    pub fn check_sounds(&mut self) -> bool {
+        if self.play_sound_gulp {
+            self.play_sound_gulp = false;
+            return true;
+        } else {
+            return false;
+        }
     }
 }
 
@@ -231,6 +254,11 @@ impl Renderer {
             );
             self.draw_text(&status_text, Color::BLACK, 32, 40, 560);
         }
+
+        if context.state == GameState::Playing && context.show_fps {
+            let fps_text = format!("fps:{}", context.fps);
+            self.draw_text(&fps_text, Color::GREEN, 16, 0, 0);
+        }
     }
 
     fn draw_player(&mut self, context: &GameContext) -> Result<(), String> {
@@ -283,10 +311,23 @@ impl Renderer {
 fn main() -> Result<(), String> {
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
+    let _audio_subsystem = sdl_context.audio()?;
+
+    let frequency = 44_100;
+    let format = AUDIO_S16LSB; // signed 16 bit samples, in little-endian byte order
+    let channels = DEFAULT_CHANNELS; // Stereo
+    let chunk_size = 1_024;
+    sdl2::mixer::open_audio(frequency, format, channels, chunk_size)?;
+    let _mixer_context =
+        sdl2::mixer::init(InitFlag::MP3 | InitFlag::FLAC | InitFlag::MOD | InitFlag::OGG)?;
+
+    sdl2::mixer::allocate_channels(4);
+
+    let gulp_sound = sdl2::mixer::Music::from_file(Path::new("snake_gulp_1.wav"))?;
 
     let window = video_subsystem
         .window(
-            "Nov LOVES Zendaya",
+            "snake_game",
             GRID_X_SIZE * DOT_SIZE_IN_PXS,
             GRID_Y_SIZE * DOT_SIZE_IN_PXS,
         )
@@ -310,6 +351,7 @@ fn main() -> Result<(), String> {
     let mut fps_time = Instant::now();
 
     'running: loop {
+        //handle input
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. } => break 'running,
@@ -324,6 +366,7 @@ fn main() -> Result<(), String> {
                     Keycode::Space => context.toggle_pause(),
                     Keycode::Escape => break 'running,
                     Keycode::N => context = GameContext::new(),
+                    Keycode::P => context.toggle_fps(),
                     _ => {}
                 },
                 _ => {}
@@ -333,20 +376,29 @@ fn main() -> Result<(), String> {
         //calculate FPS
         let fps_duration = fps_time.elapsed();
         if fps_duration.as_millis() >= 1_000 {
-            //println!("Current FPS: {}", frame_counter);
+            context.fps = frame_counter;
             frame_counter = 0;
             fps_time = Instant::now();
         }
 
+        //draw game
         renderer.draw(&context)?;
         frame_counter += 1;
 
+        //control speed of game
         let duration = game_time.elapsed();
         if duration.as_millis() >= 64 {
             context.next_tick();
             game_time = Instant::now();
         }
+
+        //play sound
+        if context.check_sounds() {
+            gulp_sound.play(1)?;
+        }
     }
+
+    sdl2::mixer::Music::halt();
 
     Ok(())
 }

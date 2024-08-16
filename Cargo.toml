@@ -9,4 +9,4 @@ rand = "0.8.5"
 [dependencies.sdl2]
 version = "0.37"
 default-features = false
-features = ["ttf"]
+features = ["ttf","mixer"]
