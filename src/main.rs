@@ -4,10 +4,11 @@ extern crate sdl2;
 use rand::Rng;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use sdl2::mixer::{InitFlag, AUDIO_S16LSB, DEFAULT_CHANNELS};
+use sdl2::mixer::{Channel, Chunk, InitFlag, Music, AUDIO_S16LSB, DEFAULT_CHANNELS};
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
+use sdl2::sys::mixer::{Mix_Music, Mix_PausedMusic, Mix_PlayingMusic};
 use sdl2::ttf::Sdl2TtfContext;
 use sdl2::video::Window;
 use std::ops::Add;
@@ -308,6 +309,32 @@ impl Renderer {
     }
 }
 
+pub struct SoundContext {
+    pub bgm: Music<'static>,
+    pub gulp_sound: Chunk,
+}
+
+impl SoundContext {
+    pub fn new() -> Result<SoundContext, String> {
+        let sound_context = SoundContext {
+            bgm: sdl2::mixer::Music::from_file(Path::new("midnight-forest-184304.mp3"))?,
+            gulp_sound: sdl2::mixer::Chunk::from_file(Path::new("snake_gulp_1.wav"))?,
+        };
+
+        Ok(sound_context)
+    }
+
+    pub fn toggle_music(&mut self) -> Result<(), String> {
+        if Music::<'static>::is_playing() {
+            sdl2::mixer::Music::halt();
+        } else {
+            self.bgm.play(-1)?;
+        }
+
+        Ok(())
+    }
+}
+
 fn main() -> Result<(), String> {
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
@@ -323,7 +350,7 @@ fn main() -> Result<(), String> {
 
     sdl2::mixer::allocate_channels(4);
 
-    let gulp_sound = sdl2::mixer::Music::from_file(Path::new("snake_gulp_1.wav"))?;
+    let mut sound_context = SoundContext::new()?;
 
     let window = video_subsystem
         .window(
@@ -350,6 +377,9 @@ fn main() -> Result<(), String> {
     let mut game_time = Instant::now();
     let mut fps_time = Instant::now();
 
+    //start music
+    sound_context.bgm.play(-1)?;
+
     'running: loop {
         //handle input
         for event in event_pump.poll_iter() {
@@ -367,6 +397,7 @@ fn main() -> Result<(), String> {
                     Keycode::Escape => break 'running,
                     Keycode::N => context = GameContext::new(),
                     Keycode::P => context.toggle_fps(),
+                    Keycode::M => sound_context.toggle_music()?,
                     _ => {}
                 },
                 _ => {}
@@ -394,7 +425,7 @@ fn main() -> Result<(), String> {
 
         //play sound
         if context.check_sounds() {
-            gulp_sound.play(1)?;
+            sdl2::mixer::Channel::play(sdl2::mixer::Channel::all(), &sound_context.gulp_sound, 0)?;
         }
     }
 
