@@ -4,13 +4,13 @@ extern crate sdl2;
 use rand::Rng;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use sdl2::mixer::{Channel, Chunk, InitFlag, Music, AUDIO_S16LSB, DEFAULT_CHANNELS};
+use sdl2::mixer::{Channel, Chunk, InitFlag, AUDIO_S16LSB, DEFAULT_CHANNELS};
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::WindowCanvas;
-use sdl2::sys::mixer::{Mix_Music, Mix_PausedMusic, Mix_PlayingMusic};
 use sdl2::ttf::Sdl2TtfContext;
 use sdl2::video::Window;
+use std::collections::HashMap;
 use std::ops::Add;
 use std::path::Path;
 use std::time::Instant;
@@ -32,6 +32,14 @@ pub enum PlayerDirection {
     Down,
     Left,
     Right,
+}
+
+#[derive(Copy, Clone, PartialEq)]
+pub enum SoundEffect {
+    Gulp1,
+    Gulp2,
+    Thunk,
+    Selfbite,
 }
 
 #[derive(Copy, Clone)]
@@ -59,7 +67,7 @@ pub struct GameContext {
     pub food_eaten: u32,
     pub fps: i32,
     pub show_fps: bool,
-    pub play_sound_gulp: bool,
+    pub sound_queue: Vec<Option<SoundEffect>>,
 }
 
 impl GameContext {
@@ -72,7 +80,7 @@ impl GameContext {
             food_eaten: 0,
             fps: 0,
             show_fps: false,
-            play_sound_gulp: false,
+            sound_queue: vec![None;12],
         }
     }
 
@@ -132,31 +140,34 @@ impl GameContext {
     }
 
     fn game_over(&mut self) {
-        println!("Game Over, food eaten: {}", self.food_eaten);
+        //println!("Game Over, food eaten: {}", self.food_eaten);
         self.state = GameState::Over;
     }
 
     fn check_collision(&mut self) {
         //x/y wall collision
         if self.player_position[0].0 < 0 || self.player_position[0].0 > (GRID_X_SIZE - 1) as i32 {
-            println!("Collision with wall");
+            //println!("Collision with wall");
+            self.sound_queue.push(Some(SoundEffect::Thunk));
             self.game_over();
         }
         if self.player_position[0].1 < 0 || self.player_position[0].1 > (GRID_Y_SIZE - 1) as i32 {
-            println!("Collision with wall");
+            //println!("Collision with wall");
+            self.sound_queue.push(Some(SoundEffect::Thunk));
             self.game_over();
         }
         //self collision must be above food collision to avoid colliding with newly grown segment.
         for i in 1..self.player_position.len() {
             if self.player_position[0] == self.player_position[i] {
-                println!(
+                /*println!(
                     "Collision with head {},{} and segment {},{} in segment position {}",
                     self.player_position[0].0,
                     self.player_position[0].1,
                     self.player_position[i].0,
                     self.player_position[i].1,
                     i + 1
-                );
+                );*/
+                self.sound_queue.push(Some(SoundEffect::Selfbite));
                 self.game_over();
             }
         }
@@ -166,7 +177,14 @@ impl GameContext {
             let tail = self.food.clone();
             self.player_position.push(tail);
             self.food_eaten += 1;
-            self.play_sound_gulp = true;
+
+            let mut rng = rand::thread_rng();
+            let gulp1 = rng.gen_bool(0.5);
+            let random_gulp = match gulp1 {
+                true => SoundEffect::Gulp1,
+                false => SoundEffect::Gulp2,
+            };
+            self.sound_queue.push(Some(random_gulp));
 
             self.spawn_food();
         }
@@ -188,15 +206,6 @@ impl GameContext {
             true => false,
             false => true,
         };
-    }
-
-    pub fn check_sounds(&mut self) -> bool {
-        if self.play_sound_gulp {
-            self.play_sound_gulp = false;
-            return true;
-        } else {
-            return false;
-        }
     }
 }
 
@@ -310,28 +319,48 @@ impl Renderer {
 }
 
 pub struct SoundContext {
-    pub bgm: Music<'static>,
-    pub gulp_sound: Chunk,
+    pub sounds: HashMap<String, Chunk>,
+    pub channels: Vec<Option<String>>,
 }
 
 impl SoundContext {
     pub fn new() -> Result<SoundContext, String> {
         let sound_context = SoundContext {
-            bgm: sdl2::mixer::Music::from_file(Path::new("midnight-forest-184304.mp3"))?,
-            gulp_sound: sdl2::mixer::Chunk::from_file(Path::new("snake_gulp_1.wav"))?,
+            sounds: HashMap::new(),
+            channels: vec![None; 16],
         };
 
         Ok(sound_context)
     }
 
-    pub fn toggle_music(&mut self) -> Result<(), String> {
-        if Music::<'static>::is_playing() {
-            sdl2::mixer::Music::halt();
-        } else {
-            self.bgm.play(-1)?;
+    pub fn load_sound(&mut self, name: &str, file_path: &str) -> Result<(), String> {
+        let mut sound  = Chunk::from_file(Path::new(file_path)).map_err(|e| e.to_string())?;
+        if name == "bgm" {
+            sound.set_volume(32);
         }
-
+        self.sounds.insert(name.to_string(), sound);
         Ok(())
+    }
+
+    pub fn play_sound(&mut self, name: &str, loops: i32) -> Result<(),String> {
+        if let Some(sound) = self.sounds.get(name) {
+            let channel = Channel::all().play(sound, loops).unwrap();
+            let channelnum = channel.0;
+            if channelnum > 0 && channelnum < self.channels.len() as i32 {
+                self.channels[channelnum as usize] = Some(name.to_string());
+            }
+            
+            Ok(())
+        } else {
+            Err(format!("Sound {} not found", name))
+        }
+    }
+
+    pub fn stop_sound(&mut self, name: &str) {
+        if let Some(channel_idx) = self.channels.iter().position(|s| s.as_deref() == Some(name)) {
+            Channel(channel_idx as i32).halt();
+            self.channels[channel_idx] = None;
+        }
     }
 }
 
@@ -342,15 +371,19 @@ fn main() -> Result<(), String> {
 
     let frequency = 44_100;
     let format = AUDIO_S16LSB; // signed 16 bit samples, in little-endian byte order
-    let channels = DEFAULT_CHANNELS; // Stereo
+    let channels = DEFAULT_CHANNELS; 
     let chunk_size = 1_024;
     sdl2::mixer::open_audio(frequency, format, channels, chunk_size)?;
+    sdl2::mixer::allocate_channels(16);
     let _mixer_context =
         sdl2::mixer::init(InitFlag::MP3 | InitFlag::FLAC | InitFlag::MOD | InitFlag::OGG)?;
 
-    sdl2::mixer::allocate_channels(4);
-
     let mut sound_context = SoundContext::new()?;
+    sound_context.load_sound("gulp1", "snake_gulp_1.wav")?;
+    sound_context.load_sound("bgm", "midnight-forest-184304.wav")?;
+    sound_context.load_sound("gulp2", "snake_gulp_2.wav")?;
+    sound_context.load_sound("thunk", "thunk.wav")?;
+    sound_context.load_sound("selfbite", "self_bite.wav")?;
 
     let window = video_subsystem
         .window(
@@ -378,7 +411,7 @@ fn main() -> Result<(), String> {
     let mut fps_time = Instant::now();
 
     //start music
-    sound_context.bgm.play(-1)?;
+    sound_context.play_sound("bgm", -1)?;
 
     'running: loop {
         //handle input
@@ -397,7 +430,6 @@ fn main() -> Result<(), String> {
                     Keycode::Escape => break 'running,
                     Keycode::N => context = GameContext::new(),
                     Keycode::P => context.toggle_fps(),
-                    Keycode::M => sound_context.toggle_music()?,
                     _ => {}
                 },
                 _ => {}
@@ -424,12 +456,18 @@ fn main() -> Result<(), String> {
         }
 
         //play sound
-        if context.check_sounds() {
-            sdl2::mixer::Channel::play(sdl2::mixer::Channel::all(), &sound_context.gulp_sound, 0)?;
+        while let Some(sound) = context.sound_queue.pop() {
+            match sound {
+                Some(effect) => match effect {
+                    SoundEffect::Gulp1 => sound_context.play_sound("gulp1", 0)?,
+                    SoundEffect::Gulp2 => sound_context.play_sound("gulp2", 0)?,
+                    SoundEffect::Thunk => sound_context.play_sound("thunk", 0)?,
+                    SoundEffect::Selfbite => sound_context.play_sound("selfbite", 0)?,
+                },
+                None => {},
+            };
         }
     }
-
-    sdl2::mixer::Music::halt();
 
     Ok(())
 }
