@@ -68,6 +68,7 @@ pub struct GameContext {
     pub fps: i32,
     pub show_fps: bool,
     pub sound_queue: Vec<Option<SoundEffect>>,
+    pub music: bool,
 }
 
 impl GameContext {
@@ -81,6 +82,7 @@ impl GameContext {
             fps: 0,
             show_fps: false,
             sound_queue: vec![None;12],
+            music: true,
         }
     }
 
@@ -247,7 +249,7 @@ impl Renderer {
             self.draw_text("Snake Game", Color::WHITE, 128, 120, 100);
             self.draw_text("PAUSED", Color::RED, 64, 260, 240);
             self.draw_text(
-                "ESC: quit   SB: toggle pause    N: new game WASD: move",
+                "ESC: quit   SB: pause    N: new game   M: music WASD: move",
                 Color::GRAY,
                 32,
                 40,
@@ -346,7 +348,8 @@ impl SoundContext {
         if let Some(sound) = self.sounds.get(name) {
             let channel = Channel::all().play(sound, loops).unwrap();
             let channelnum = channel.0;
-            if channelnum > 0 && channelnum < self.channels.len() as i32 {
+            //println!("playing {} on channel {}", name, channelnum);
+            if channelnum >= 0 && channelnum < self.channels.len() as i32 {
                 self.channels[channelnum as usize] = Some(name.to_string());
             }
             
@@ -358,6 +361,7 @@ impl SoundContext {
 
     pub fn stop_sound(&mut self, name: &str) {
         if let Some(channel_idx) = self.channels.iter().position(|s| s.as_deref() == Some(name)) {
+            //println!("attempting to halt {} on channel {}", name, channel_idx);
             Channel(channel_idx as i32).halt();
             self.channels[channel_idx] = None;
         }
@@ -430,6 +434,15 @@ fn main() -> Result<(), String> {
                     Keycode::Escape => break 'running,
                     Keycode::N => context = GameContext::new(),
                     Keycode::P => context.toggle_fps(),
+                    Keycode::M => {
+                        if context.music {
+                            sound_context.stop_sound("bgm");
+                            context.music = false;
+                        } else {
+                            sound_context.play_sound("bgm", -1)?;
+                            context.music = true;
+                        }
+                    },
                     _ => {}
                 },
                 _ => {}
