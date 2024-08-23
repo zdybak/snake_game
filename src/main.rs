@@ -1,5 +1,6 @@
 extern crate sdl2;
 mod gamecontext;
+mod gameinput;
 mod gamerenderer;
 mod gamesettings;
 mod gamesound;
@@ -8,7 +9,6 @@ mod point;
 use gamecontext::SoundEffect;
 use gamesettings::{DOT_SIZE_IN_PXS, GRID_X_SIZE, GRID_Y_SIZE};
 use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
 use sdl2::mixer::{InitFlag, AUDIO_S16LSB, DEFAULT_CHANNELS};
 use std::time::Instant;
 
@@ -58,35 +58,20 @@ fn main() -> Result<(), String> {
     sound_context.play_sound("bgm", -1)?;
 
     'running: loop {
-        //handle input
+        if context.quit {
+            break 'running;
+        }
+
+        //handle events
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. } => break 'running,
                 Event::KeyDown {
                     keycode: Some(keycode),
                     ..
-                } => match keycode {
-                    Keycode::W => context.move_up(),
-                    Keycode::S => context.move_down(),
-                    Keycode::D => context.move_right(),
-                    Keycode::A => context.move_left(),
-                    Keycode::Space => context.toggle_pause(),
-                    Keycode::Escape => break 'running,
-                    Keycode::N => context = gamecontext::GameContext::new(),
-                    Keycode::P => context.toggle_fps(),
-                    Keycode::M => {
-                        if context.music {
-                            sound_context.stop_sound("bgm");
-                            context.music = false;
-                        } else {
-                            sound_context.play_sound("bgm", -1)?;
-                            context.music = true;
-                        }
-                    }
-                    _ => {}
-                },
+                } => gameinput::GameInput::handle_key(&mut context, &mut sound_context, keycode)?,
                 _ => {}
-            }
+            };
         }
 
         //calculate FPS

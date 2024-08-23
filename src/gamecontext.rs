@@ -36,6 +36,7 @@ pub struct GameContext {
     pub show_fps: bool,
     pub sound_queue: Vec<Option<SoundEffect>>,
     pub music: bool,
+    pub quit: bool,
 }
 
 impl GameContext {
@@ -50,7 +51,16 @@ impl GameContext {
             show_fps: false,
             sound_queue: vec![None; 12],
             music: true,
+            quit: false,
         }
+    }
+
+    pub fn new_game(&mut self) {
+        self.player_position = vec![Point(3, 1), Point(2, 1), Point(1, 1)];
+        self.player_direction = PlayerDirection::Right;
+        self.state = GameState::Paused;
+        self.food = Point(3, 3);
+        self.food_eaten = 3;
     }
 
     pub fn next_tick(&mut self) {
@@ -175,5 +185,9 @@ impl GameContext {
             true => false,
             false => true,
         };
+    }
+
+    pub fn quit_game(&mut self) {
+        self.quit = true;
     }
 }
