@@ -51,9 +51,23 @@ impl Renderer {
             self.draw_text("Snake Game", Color::WHITE, 128, 120, 100);
             self.draw_text("PAUSED", Color::RED, 64, 260, 240);
             self.draw_text(
-                "ESC: quit   SB: pause    N: new game   M: music WASD: move",
+                "WASD keys,DPad: MOVE SNAKE   N key,Button A: NEW GAME",
                 Color::GRAY,
-                32,
+                28,
+                40,
+                480,
+            );
+            self.draw_text(
+                "M key,X Button: TOGGLE MUSIC   P key,Button B: SHOW FPS",
+                Color::GRAY,
+                28,
+                40,
+                520,
+            );
+            self.draw_text(
+                "ESC key,Back Button: QUIT      Space,Start Button: UNPAUSE",
+                Color::GRAY,
+                28,
                 40,
                 560,
             );

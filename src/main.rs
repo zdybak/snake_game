@@ -7,6 +7,7 @@ mod gamesound;
 mod point;
 
 use gamecontext::SoundEffect;
+use gameinput::InputType;
 use gamesettings::{DOT_SIZE_IN_PXS, GRID_X_SIZE, GRID_Y_SIZE};
 use sdl2::event::Event;
 use sdl2::mixer::{InitFlag, AUDIO_S16LSB, DEFAULT_CHANNELS};
@@ -16,6 +17,7 @@ fn main() -> Result<(), String> {
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
     let _audio_subsystem = sdl_context.audio()?;
+    let controller_subsystem = sdl_context.game_controller()?;
 
     let frequency = 44_100;
     let format = AUDIO_S16LSB; // signed 16 bit samples, in little-endian byte order
@@ -44,6 +46,10 @@ fn main() -> Result<(), String> {
         .build()
         .map_err(|e| e.to_string())?;
 
+    // Initialize the controller subsystem
+    let controller_subsystem = sdl_context.game_controller()?;
+    let controller = gameinput::GameInput::check_controllers(&controller_subsystem);
+
     let mut renderer = gamerenderer::Renderer::new(window)?;
 
     let mut event_pump = sdl_context.event_pump()?;
@@ -69,7 +75,20 @@ fn main() -> Result<(), String> {
                 Event::KeyDown {
                     keycode: Some(keycode),
                     ..
-                } => gameinput::GameInput::handle_key(&mut context, &mut sound_context, keycode)?,
+                } => gameinput::GameInput::handle_input(
+                    &mut context,
+                    &mut sound_context,
+                    InputType::Keyboard(keycode),
+                )?,
+                Event::ControllerButtonDown { button, .. } => {
+                    if controller.is_some() {
+                        gameinput::GameInput::handle_input(
+                            &mut context,
+                            &mut sound_context,
+                            InputType::Controller(button),
+                        )?
+                    }
+                }
                 _ => {}
             };
         }
@@ -86,13 +105,6 @@ fn main() -> Result<(), String> {
         renderer.draw(&context)?;
         frame_counter += 1;
 
-        //control speed of game
-        let duration = game_time.elapsed();
-        if duration.as_millis() >= 64 {
-            context.next_tick();
-            game_time = Instant::now();
-        }
-
         //play sound
         while let Some(sound) = context.sound_queue.pop() {
             match sound {
@@ -104,6 +116,19 @@ fn main() -> Result<(), String> {
                 },
                 None => {}
             };
+        }
+
+        //control speed of game
+        let duration = game_time.elapsed();
+
+        //lock to reasonable fps
+        if duration.as_millis() <= 32 {
+            std::thread::sleep(std::time::Duration::from_millis(32));
+        }
+
+        if duration.as_millis() >= 64 {
+            context.next_tick();
+            game_time = Instant::now();
         }
     }
 
