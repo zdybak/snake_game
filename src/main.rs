@@ -10,7 +10,7 @@ use gamecontext::SoundEffect;
 use gameinput::InputType;
 use gamesettings::{DOT_SIZE_IN_PXS, GRID_X_SIZE, GRID_Y_SIZE};
 use sdl2::event::Event;
-use sdl2::mixer::{InitFlag, AUDIO_S16LSB, DEFAULT_CHANNELS};
+use sdl2::mixer::{AUDIO_S16LSB, DEFAULT_CHANNELS};
 use std::time::Instant;
 
 fn main() -> Result<(), String> {
@@ -25,9 +25,7 @@ fn main() -> Result<(), String> {
     let chunk_size = 1_024;
     sdl2::mixer::open_audio(frequency, format, channels, chunk_size)?;
     sdl2::mixer::allocate_channels(16);
-    let _mixer_context =
-        sdl2::mixer::init(InitFlag::MP3 | InitFlag::FLAC | InitFlag::MOD | InitFlag::OGG)?;
-
+    
     let mut sound_context = gamesound::GameSound::new()?;
     sound_context.load_sound("gulp1", "snake_gulp_1.wav")?;
     sound_context.load_sound("bgm", "midnight-forest-184304.wav")?;
@@ -60,6 +58,7 @@ fn main() -> Result<(), String> {
     let mut frame_counter = 0;
     let mut game_time = Instant::now();
     let mut fps_time = Instant::now();
+    let mut render_time = Instant::now();
 
     //start music
     sound_context.play_sound("bgm", -1)?;
@@ -102,9 +101,13 @@ fn main() -> Result<(), String> {
             fps_time = Instant::now();
         }
 
-        //draw game
-        renderer.draw(&context)?;
-        frame_counter += 1;
+        //draw game, lock to 265 fps
+        let render_duration = render_time.elapsed();
+        if render_duration.as_millis() > 3 {
+            renderer.draw(&context)?;
+            frame_counter+=1;
+            render_time = Instant::now();
+        }
 
         //play sound
         while let Some(sound) = context.sound_queue.pop() {
@@ -120,14 +123,8 @@ fn main() -> Result<(), String> {
         }
 
         //control speed of game
-        let duration = game_time.elapsed();
-
-        //lock to reasonable fps
-        if duration.as_millis() <= 32 {
-            std::thread::sleep(std::time::Duration::from_millis(32));
-        }
-
-        if duration.as_millis() >= 64 {
+        let game_elapsed = game_time.elapsed();
+        if game_elapsed.as_millis() >= 64 {
             context.next_tick();
             game_time = Instant::now();
         }

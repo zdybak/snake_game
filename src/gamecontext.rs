@@ -48,7 +48,7 @@ impl GameContext {
             food: Point(3, 3),
             food_eaten: 0,
             fps: 0,
-            show_fps: false,
+            show_fps: true,
             sound_queue: vec![None; 12],
             music: true,
             quit: false,
