@@ -17,7 +17,7 @@ fn main() -> Result<(), String> {
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
     let _audio_subsystem = sdl_context.audio()?;
-    let controller_subsystem = sdl_context.game_controller()?;
+    let _controller_subsystem = sdl_context.game_controller()?;
 
     let frequency = 44_100;
     let format = AUDIO_S16LSB; // signed 16 bit samples, in little-endian byte order
@@ -42,7 +42,8 @@ fn main() -> Result<(), String> {
             GRID_Y_SIZE * DOT_SIZE_IN_PXS,
         )
         .position_centered()
-        .opengl()
+        .vulkan()
+        .fullscreen_desktop()
         .build()
         .map_err(|e| e.to_string())?;
 
